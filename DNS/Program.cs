@@ -1,11 +1,15 @@
 ﻿using System.Net;
+using System.Net.NetworkInformation;
 using System.Net.Sockets;
+using System.Management;
+
+List<string> dnsServers = new List<string>() { "1.1.1.1; General", "81.180.65.18; MD", "81.180.65.41; Nu functioneaza" };
 
 void WriteMenu()
 {
     Console.ForegroundColor = ConsoleColor.White;
-    Console.WriteLine("\n1. Gasire ip din numele domeniului");
-    Console.WriteLine("2. Găsi domeniu sau lista de domenii din ip");
+    Console.WriteLine("\n1. Gasire DNS name dupa ip");
+    Console.WriteLine("2. Gasire Ip address dupa DNS name");
     Console.WriteLine("3. Utilizeaza alt dns");
     Console.WriteLine("0. Iesire");
 }
@@ -66,7 +70,7 @@ void GetDNSNameByIp()
 void GetIpByDNSName()
 {
     Console.ForegroundColor = ConsoleColor.DarkYellow;
-    Console.WriteLine("\nGaseste Ip address dupa DNS name");
+    Console.WriteLine("\nGasire Ip address dupa DNS name");
     Console.Write("Introduce DNS: ");
     Console.ForegroundColor = ConsoleColor.Cyan;
 
@@ -91,7 +95,53 @@ void GetIpByDNSName()
 
 void SetOtherDns()
 {
+    Console.ForegroundColor = ConsoleColor.DarkYellow;
+    int server = -1;
+    Console.WriteLine("\nLista de DNS severe");
+       
+    Console.ForegroundColor = ConsoleColor.Gray;
+    int i = 1;
 
+    foreach(var dns in dnsServers)
+    {
+        Console.WriteLine(i + ". " + dns);
+        i++;
+    }
+
+    Console.ForegroundColor = ConsoleColor.DarkYellow;
+    Console.Write("Alege un DNS server din lista: ");
+
+    while(server == -1)
+    {
+        try
+        {
+            server = int.Parse(Console.ReadLine());
+            string ip = dnsServers.ElementAt(server - 1).Split(';')[0];
+            SetDNS(ip);
+            Console.ForegroundColor= ConsoleColor.DarkYellow;
+            Console.Write("DNS server setat: ");
+            Console.ForegroundColor = ConsoleColor.Cyan;
+            Console.WriteLine(ip);
+        }
+        catch(FormatException fex)
+        {
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine("Alegeti un DNS server din lista");
+            server = -1;
+        }
+        catch (ArgumentOutOfRangeException fex)
+        {
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine("Alegeti un DNS server din lista");
+            server = -1;
+        }
+        catch( Exception ex)
+        {
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine("Ceva nu a mers corect");
+            server = -1;
+        }
+    }
 }
 
 int HandleAction(int action)
@@ -108,23 +158,78 @@ int HandleAction(int action)
 
 while (true)
 {
+
     WriteMenu();
     int action = WaitAction();
     
     int response = HandleAction(action);
 
     if (response == -1)
+    {
+        UnsetDNS();
         break;
+    }
 }
 
 
+//   Love stackoverflow
 
 
-IPAddress addr = IPAddress.Parse("185.60.218.35");
-IPHostEntry entry = Dns.GetHostEntry(addr);
-Console.WriteLine(entry.HostName);
+NetworkInterface GetActiveEthernetOrWifiNetworkInterface()
+{
+    var Nic = NetworkInterface.GetAllNetworkInterfaces().FirstOrDefault(
+        a => a.OperationalStatus == OperationalStatus.Up &&
+        (a.NetworkInterfaceType == NetworkInterfaceType.Wireless80211 || a.NetworkInterfaceType == NetworkInterfaceType.Ethernet) &&
+        a.GetIPProperties().GatewayAddresses.Any(g => g.Address.AddressFamily.ToString() == "InterNetwork"));
 
-IPHostEntry hostInfo = Dns.GetHostEntry("www.contoso.com");
-Console.WriteLine(hostInfo.HostName);
-var a = Dns.GetHostAddresses("www.facebook.com");
-Console.WriteLine(a[0]);
+    return Nic;
+}
+
+void SetDNS(string DnsString)
+{
+    string[] Dns = { DnsString };
+    var CurrentInterface = GetActiveEthernetOrWifiNetworkInterface();
+    if (CurrentInterface == null) return;
+
+    ManagementClass objMC = new ManagementClass("Win32_NetworkAdapterConfiguration");
+    ManagementObjectCollection objMOC = objMC.GetInstances();
+    foreach (ManagementObject objMO in objMOC)
+    {
+        if ((bool)objMO["IPEnabled"])
+        {
+            if (objMO["Description"].ToString().Equals(CurrentInterface.Description))
+            {
+                ManagementBaseObject objdns = objMO.GetMethodParameters("SetDNSServerSearchOrder");
+                if (objdns != null)
+                {
+                    objdns["DNSServerSearchOrder"] = Dns;
+                    objMO.InvokeMethod("SetDNSServerSearchOrder", objdns, null);
+                }
+            }
+        }
+    }
+}
+
+void UnsetDNS()
+{
+    var CurrentInterface = GetActiveEthernetOrWifiNetworkInterface();
+    if (CurrentInterface == null) return;
+
+    ManagementClass objMC = new ManagementClass("Win32_NetworkAdapterConfiguration");
+    ManagementObjectCollection objMOC = objMC.GetInstances();
+    foreach (ManagementObject objMO in objMOC)
+    {
+        if ((bool)objMO["IPEnabled"])
+        {
+            if (objMO["Description"].ToString().Equals(CurrentInterface.Description))
+            {
+                ManagementBaseObject objdns = objMO.GetMethodParameters("SetDNSServerSearchOrder");
+                if (objdns != null)
+                {
+                    objdns["DNSServerSearchOrder"] = null;
+                    objMO.InvokeMethod("SetDNSServerSearchOrder", objdns, null);
+                }
+            }
+        }
+    }
+}
