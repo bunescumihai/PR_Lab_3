@@ -3,7 +3,7 @@ using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Management;
 
-List<string> dnsServers = new List<string>() { "1.1.1.1; General", "81.180.65.18; MD", "81.180.65.41; Nu functioneaza" };
+List<string> dnsServers = new List<string>() { "1.1.1.1; General", "89.34.198.253; Moldtelecom", "81.180.65.41; Nu functioneaza" };
 
 void WriteMenu()
 {
